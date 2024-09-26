@@ -1,13 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { View, Button, StyleSheet, Alert, Text, ScrollView, TextInput, TouchableOpacity , Platform} from 'react-native';
+import { View, Button, StyleSheet, Alert, Text, ScrollView, TextInput, TouchableOpacity, Platform } from 'react-native';
 import { db, auth } from '../../firebase';
-import { Ionicons, FontAwesome } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
+
+// NUST building locations with coordinates
+const nustBuildings = [
+  { name: 'Concordia 1', coordinates: [33.6416, 72.9934] },
+  { name: 'Concordia 2', coordinates: [33.6411, 72.9938] },
+  { name: 'SMME (School of Mechanical and Manufacturing Engineering)', coordinates: [33.6470, 72.9906] },
+  { name: 'SEECS (School of Electrical Engineering and Computer Science)', coordinates: [33.6449, 72.9902] },
+  { name: 'NBS (NUST Business School)', coordinates: [33.6445, 72.9887] },
+  { name: 'NIT (National Institute of Transportation)', coordinates: [33.6451, 72.9862] },
+  { name: 'CIPS (Center for Innovation and Policy Studies)', coordinates: [33.6472, 72.9937] },
+  { name: 'RCMS (Research Center for Modeling and Simulation)', coordinates: [33.6487, 72.9945] },
+  { name: 'PNEC (Pakistan Navy Engineering College)', coordinates: [24.9056, 67.1167] },
+];
 
 const EditSocietyScreen = ({ route, navigation }) => {
   const { societyId } = route.params;
   const [society, setSociety] = useState(null);
+  const [locations, setLocations] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [originalInterviewStatus, setOriginalInterviewStatus] = useState(null);
-  const [locations, setLocations] = useState([{ id: 0, name: '' }]);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -37,8 +52,9 @@ const EditSocietyScreen = ({ route, navigation }) => {
           const societyData = societyDoc.data();
           setSociety(societyData);
           setOriginalInterviewStatus(societyData.isOpenForInterviews);
+
           if (societyData.locations) {
-            setLocations(societyData.locations.map((loc, index) => ({ id: index, name: loc })));
+            setLocations(societyData.locations.map((loc, index) => ({ id: index, name: loc.name, coordinates: loc.coordinates })));
           }
         }
       } catch (error) {
@@ -54,7 +70,12 @@ const EditSocietyScreen = ({ route, navigation }) => {
       const updatedSociety = { ...society };
 
       if (society.isOpenForInterviews) {
-        updatedSociety.locations = locations.map(location => location.name).filter(name => name);
+        updatedSociety.locations = locations
+          .filter(loc => loc.name && loc.coordinates.length === 2)
+          .map(location => ({
+            name: location.name,
+            coordinates: location.coordinates,
+          }));
       } else {
         updatedSociety.locations = [];
       }
@@ -81,34 +102,35 @@ const EditSocietyScreen = ({ route, navigation }) => {
           userId: userDoc.id,
           message: `The interview status for ${society.name} has changed to ${society.isOpenForInterviews ? 'open' : 'closed'}.`,
           createdAt: new Date()
-        })
+        });
       });
     } catch (error) {
       console.error("Error notifying users:", error);
     }
   };
 
-  const handleInputChange = (field, value) => {
-    setSociety(prevState => ({ ...prevState, [field]: value }));
-  };
-
-  const handleLocationChange = (id, value) => {
-    const updatedLocations = locations.map(location =>
-      location.id === id ? { ...location, name: value } : location
-    );
-    setLocations(updatedLocations);
+  const handleLocationSelect = (name) => {
+    const selected = nustBuildings.find(location => location.name === name);
+    if (selected) {
+      setSelectedLocation(selected);
+      setLocations([...locations, { id: locations.length, name: selected.name, coordinates: selected.coordinates }]);
+    }
   };
 
   const addLocationField = () => {
-    setLocations([...locations, { id: locations.length, name: '' }]);
+    setLocations([...locations, { id: locations.length, name: '', coordinates: [] }]);
   };
 
   const toggleInterviewStatus = () => {
     const newStatus = !society.isOpenForInterviews;
     setSociety(prevState => ({ ...prevState, isOpenForInterviews: newStatus }));
     if (!newStatus) {
-      setLocations([{ id: 0, name: '' }]);
+      setLocations([{ id: 0, name: '', coordinates: [] }]);
     }
+  };
+
+  const handleInputChange = (field, value) => {
+    setSociety(prevState => ({ ...prevState, [field]: value }));
   };
 
   if (!society) {
@@ -117,29 +139,35 @@ const EditSocietyScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-    <View style={styles.header}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-       <Ionicons name="arrow-back" size={24} color="#F2F2F2" />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>Edit Society</Text>
-    </View>
-    <ScrollView contentContainerStyle={styles.scrollViewContainer}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#F2F2F2" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Society</Text>
+      </View>
+      <ScrollView contentContainerStyle={styles.scrollViewContainer}>
         <TextInput
           style={styles.input}
           value={society.name}
           onChangeText={(value) => handleInputChange('name', value)}
+          placeholder="Society Name"
+          placeholderTextColor="#A9A9A9"
         />
         <Text style={styles.label}>Slogan:</Text>
         <TextInput
           style={styles.input}
           value={society.slogan}
           onChangeText={(value) => handleInputChange('slogan', value)}
+          placeholder="Slogan"
+          placeholderTextColor="#A9A9A9"
         />
         <Text style={styles.label}>Description:</Text>
         <TextInput
           style={styles.input}
           value={society.description}
           onChangeText={(value) => handleInputChange('description', value)}
+          placeholder="Description"
+          placeholderTextColor="#A9A9A9"
           multiline
         />
         <Text style={styles.label}>Main Work:</Text>
@@ -147,41 +175,53 @@ const EditSocietyScreen = ({ route, navigation }) => {
           style={styles.input}
           value={society.mainWork}
           onChangeText={(value) => handleInputChange('mainWork', value)}
+          placeholder="Main Work"
+          placeholderTextColor="#A9A9A9"
         />
         <Text style={styles.label}>Instagram (optional):</Text>
         <TextInput
           style={styles.input}
           value={society.instagram || ''}
           onChangeText={(value) => handleInputChange('instagram', value)}
+          placeholder="Instagram"
+          placeholderTextColor="#A9A9A9"
         />
-               <Text style={styles.label}>Open for Interviews:</Text>
+        <Text style={styles.label}>Open for Interviews:</Text>
         <TouchableOpacity
           onPress={toggleInterviewStatus}
           style={society.isOpenForInterviews ? styles.openForInterviewButton : styles.notOpenForInterviewButton}
         >
           <Text style={styles.openForInterviewButtonText}>{society.isOpenForInterviews ? 'Yes' : 'No'}</Text>
         </TouchableOpacity>
+
         {society.isOpenForInterviews && (
           <View>
             <Text style={styles.label}>Interview Locations (optional):</Text>
-            {locations.map(location => (
-              <TextInput
-                key={location.id}
-                style={styles.input}
-                value={location.name}
-                onChangeText={(value) => handleLocationChange(location.id, value)}
-                placeholder={`Location ${location.id + 1}`}
-              />
+            <Picker
+              selectedValue={selectedLocation?.name}
+              style={styles.picker}
+              onValueChange={(itemValue) => handleLocationSelect(itemValue)}
+            >
+              {nustBuildings.map((building, index) => (
+                <Picker.Item key={index} label={building.name} value={building.name} />
+              ))}
+            </Picker>
+
+            {locations.map((location, index) => (
+              <View key={index} style={styles.locationContainer}>
+                <Text style={styles.locationText}>{location.name} (Lat: {location.coordinates[0]}, Lng: {location.coordinates[1]})</Text>
+              </View>
             ))}
+
             <TouchableOpacity onPress={addLocationField} style={styles.addLocationButton}>
-              <Text style={styles.addLocationButtonText}>Add Location</Text>
+              <Text style={styles.addLocationButtonText}>Add Custom Location</Text>
             </TouchableOpacity>
           </View>
         )}
-        <View style={styles.saveButtonContainer}>
-          <Button title="Save" onPress={handleSave} color="#2196F3" />
-        </View>
       </ScrollView>
+      <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
+        <Text style={styles.saveButtonText}>Save</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -194,80 +234,96 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#474747',
     flexDirection: 'row',
-    paddingVertical: Platform.OS === 'ios' ? 20 : 15,
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingBottom: 20,
     paddingHorizontal: 10,
-    borderRadius: 80,
-    marginBottom: Platform.OS === 'ios' ? 20 : 15,
-    width: 300,
-    alignSelf: 'center',
-    justifyContent: 'flex-start',
-    marginTop: Platform.OS === 'ios' ? 0 : 40,
   },
   backButton: {
-    paddingHorizontal: 10,
+    marginRight: 10,
   },
   headerTitle: {
-    color: '#F2F2F2ffb',
-    fontSize: Platform.OS === 'ios' ? 20 : 20,
+    fontSize: 20,
+    color: '#F2F2F2',
     fontWeight: 'bold',
-    marginLeft: Platform.OS === 'ios' ? 30 : 30,
   },
   scrollViewContainer: {
-    padding: 20,
-  },
-  loadingText: {
-    textAlign: 'center',
-    marginTop: 20,
-    fontSize: 18,
-    color: '#fff',
+    paddingHorizontal: 10,
+    paddingBottom: 30,
   },
   label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#fff',
+    fontSize: 18,
+    color: '#F2F2F2',
+    marginVertical: 10,
   },
   input: {
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 5,
-    padding: 10,
-    marginBottom: 20,
+    backgroundColor: '#1E1E1E',
+    color: '#F2F2F2',
+    padding: 15,
+    borderRadius: 8,
     fontSize: 16,
-    backgroundColor: '#fff',
+    marginVertical: 10,
   },
   openForInterviewButton: {
     backgroundColor: '#4CAF50',
     padding: 10,
     borderRadius: 5,
     alignItems: 'center',
-    marginBottom: 20,
   },
   notOpenForInterviewButton: {
     backgroundColor: '#F44336',
     padding: 10,
     borderRadius: 5,
     alignItems: 'center',
-    marginBottom: 20,
   },
   openForInterviewButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
+    color: '#FFF',
+    fontWeight: 'bold',
+  },
+  picker: {
+    backgroundColor: '#1E1E1E',
+    color: '#F2F2F2',
+    marginVertical: 10,
+  },
+  locationContainer: {
+    backgroundColor: '#1E1E1E',
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
+  locationText: {
+    color: '#F2F2F2',
   },
   addLocationButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#4CAF50',
     padding: 10,
     borderRadius: 5,
     alignItems: 'center',
-    marginBottom: 20,
+    marginVertical: 10,
   },
   addLocationButtonText: {
-    color: '#fff',
+    color: '#FFF',
     fontSize: 16,
+    fontWeight: 'bold',
   },
-  saveButtonContainer: {
-    marginTop: 20,
-    marginBottom: 40,
+  saveButton: {
+    backgroundColor: '#2196F3',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    margin: 20,
+  },
+  saveButtonText: {
+    fontSize: 18,
+    color: '#FFF',
+    fontWeight: 'bold',
+  },
+  loadingText: {
+    color: '#F2F2F2',
+    fontSize: 18,
+    textAlign: 'center',
+    marginTop: 50,
   },
 });
 

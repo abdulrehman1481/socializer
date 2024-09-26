@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from './homescreen';
 import Profile from './profilescreen';
 import SearchScreen from '../components/searchandinteractionscreen/searchscreen';
+import Mapscreen from './Mapscreen';   
 
 const Tab = createBottomTabNavigator();
 
@@ -95,6 +96,10 @@ const MainTabs = () => {
               tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={30} color={color} />,
             }}
           />
+          <Tab.Screen name="Map" component={Mapscreen} options={{
+              tabBarIcon: ({ color }) => <Ionicons name="location" size={30} color={color} />,
+            }} />
+
         </Tab.Navigator>
       </View>
     </KeyboardAvoidingView>

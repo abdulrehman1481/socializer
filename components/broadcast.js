@@ -162,11 +162,7 @@ const BroadcastScreen = ({ route }) => {
       console.error('Error sending broadcast:', error);
       Alert.alert('Error', 'An error occurred while sending the broadcast.');
     }
-  };
-  
-  
-  
-
+    };        
   const handleUserPress = (userId) => {
     navigation.navigate('UserProfileScreen', { userId });
   };
