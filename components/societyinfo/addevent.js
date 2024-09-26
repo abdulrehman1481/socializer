@@ -2,8 +2,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, FlatList, SafeAreaView, RefreshControl } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { db, firebase } from '../../firebase';
+import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 
+const nustBuildings = [
+  { name: 'Concordia 1', coordinates: [33.6416, 72.9934] },
+  { name: 'Concordia 2', coordinates: [33.6411, 72.9938] },
+  { name: 'SMME (School of Mechanical and Manufacturing Engineering)', coordinates: [33.6470, 72.9906] },
+  { name: 'SEECS (School of Electrical Engineering and Computer Science)', coordinates: [33.6449, 72.9902] },
+  { name: 'NBS (NUST Business School)', coordinates: [33.6445, 72.9887] },
+  { name: 'NIT (National Institute of Transportation)', coordinates: [33.6451, 72.9862] },
+  { name: 'CIPS (Center for Innovation and Policy Studies)', coordinates: [33.6472, 72.9937] },
+  { name: 'RCMS (Research Center for Modeling and Simulation)', coordinates: [33.6487, 72.9945] },
+  { name: 'PNEC (Pakistan Navy Engineering College)', coordinates: [24.9056, 67.1167] },
+];
 const AddEventScreen = ({ route, navigation }) => {
   const { societyId, event } = route.params || {};
   const [events, setEvents] = useState([]);
@@ -12,6 +24,7 @@ const AddEventScreen = ({ route, navigation }) => {
   const [eventDescription, setEventDescription] = useState(event ? event.description : '');
   const [eventLink, setEventLink] = useState(event ? event.link || '' : '');
   const [preEventNotificationTime, setPreEventNotificationTime] = useState(event ? event.preEventNotificationTime || 24 : 24);
+  const [selectedLocation, setSelectedLocation] = useState(event ? event.location : '');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -40,59 +53,58 @@ const AddEventScreen = ({ route, navigation }) => {
   };
 
   const handleAddOrUpdateEvent = async () => {
-    if (!eventName || !eventDate || !eventDescription) {
-      Alert.alert("Please fill in all required fields.");
-      return;
+    if (!eventName || !eventDate || !eventDescription || !selectedLocation) {
+        Alert.alert("Please fill in all required fields.");
+        return;
     }
 
+    // Find the coordinates for the selected location
+    const selectedBuilding = nustBuildings.find(building => building.name === selectedLocation);
+    const coordinates = selectedBuilding ? selectedBuilding.coordinates : [null, null]; // Default to [null, null] if not found
+
     const newEvent = {
-      name: eventName,
-      date: eventDate.toISOString(),
-      description: eventDescription,
-      link: eventLink || '',
-      updatedBy: firebase.auth().currentUser.uid,
-      updatedAt: new Date().toISOString(),
-      preEventNotificationTime,
+        name: eventName,
+        date: eventDate.toISOString(),
+        description: eventDescription,
+        link: eventLink || '',
+        updatedBy: firebase.auth().currentUser.uid,
+        updatedAt: new Date().toISOString(),
+        preEventNotificationTime,
+        location: selectedLocation,
+        coordinates: coordinates, // Add coordinates to the event
     };
 
     try {
-      const societyRef = db.collection('societies').doc(societyId);
+        const societyRef = db.collection('societies').doc(societyId);
 
-      if (event) {
-        // Update existing event
-        const societyDoc = await societyRef.get();
-        const updatedEvents = societyDoc.data().events.map(e =>
-          e.name === event.name ? newEvent : e
-        );
-        await societyRef.update({
-          events: updatedEvents,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-        Alert.alert("Event updated successfully!");
+        if (event) {
+            const societyDoc = await societyRef.get();
+            const updatedEvents = societyDoc.data().events.map(e =>
+                e.name === event.name ? newEvent : e
+            );
+            await societyRef.update({
+                events: updatedEvents,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            Alert.alert("Event updated successfully!");
+            await notifyUsers(`The event "${eventName}" was updated by ${firebase.auth().currentUser.displayName}.`);
+        } else {
+            await societyRef.update({
+                events: firebase.firestore.FieldValue.arrayUnion(newEvent),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            Alert.alert("Event added successfully!");
+            await notifyUsers(`A new event "${eventName}" was added by ${firebase.auth().currentUser.displayName}.`);
+        }
 
-        // Notify users
-        await notifyUsers(`The event "${eventName}" was updated by ${firebase.auth().currentUser.displayName}.`);
-
-      } else {
-        // Add new event
-        await societyRef.update({
-          events: firebase.firestore.FieldValue.arrayUnion(newEvent),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-        Alert.alert("Event added successfully!");
-
-        // Notify users
-        await notifyUsers(`A new event "${eventName}" was added by ${firebase.auth().currentUser.displayName}.`);
-      }
-
-      fetchEvents();
-      resetForm();
-
+        fetchEvents();
+        resetForm();
     } catch (error) {
-      console.error("Error adding/updating event:", error);
-      Alert.alert("Error adding/updating event. Please try again.");
+        console.error("Error adding/updating event:", error);
+        Alert.alert("Error adding/updating event. Please try again.");
     }
-  };
+};
+
 
   const notifyUsers = async (message) => {
     const usersSnapshot = await db.collection('users').where('societies', 'array-contains', societyId).get();
@@ -146,6 +158,7 @@ const AddEventScreen = ({ route, navigation }) => {
     setEventDescription('');
     setEventLink('');
     setPreEventNotificationTime(24);
+    setSelectedLocation('');
   };
 
   const handleEditEvent = (item) => {
@@ -160,6 +173,7 @@ const AddEventScreen = ({ route, navigation }) => {
       {item.link ? (
         <Text style={styles.eventLink}>Link: {item.link}</Text>
       ) : null}
+      <Text style={styles.eventLocation}>Location: {item.location}</Text>
       <TouchableOpacity
         style={styles.editButton}
         onPress={() => handleEditEvent(item)}
@@ -225,29 +239,36 @@ const AddEventScreen = ({ route, navigation }) => {
         <Text style={styles.label}>Notify Users Before (hours):</Text>
         <TextInput
           style={styles.input}
-          value={preEventNotificationTime.toString()}
-          onChangeText={(value) => setPreEventNotificationTime(parseInt(value))}
+          value={String(preEventNotificationTime)}
+          onChangeText={text => setPreEventNotificationTime(Number(text))}
+          placeholder="Enter hours"
           keyboardType="numeric"
-          placeholder="Enter hours before event"
         />
+        
+        <Text style={styles.label}>Select Location:</Text>
+        <Picker
+          selectedValue={selectedLocation}
+          style={styles.picker}
+          onValueChange={(itemValue) => setSelectedLocation(itemValue)}
+        >
+          <Picker.Item label="Select Location" value="" />
+          {nustBuildings.map((building, index) => (
+            <Picker.Item key={index} label={building.name} value={building.name} />
+          ))}
+        </Picker>
 
-        <TouchableOpacity style={styles.addButton} onPress={handleAddOrUpdateEvent}>
-          <Text style={styles.addButtonText}>{event ? "Update Event" : "Add Event"}</Text>
+        <TouchableOpacity style={styles.submitButton} onPress={handleAddOrUpdateEvent}>
+          <Text style={styles.submitButtonText}>{event ? "Update Event" : "Add Event"}</Text>
         </TouchableOpacity>
-
-        {event && (
-          <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteEvent(event.name)}>
-            <Text style={styles.deleteButtonText}>Delete Event</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <FlatList
         data={events}
-        keyExtractor={(item) => item.name}
         renderItem={renderEventItem}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={styles.eventsContainer}
+        keyExtractor={item => item.name}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
     </SafeAreaView>
   );
@@ -256,113 +277,106 @@ const AddEventScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
+    padding: 16,
+    backgroundColor: '#fff',
   },
   header: {
-    marginTop: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
+    marginBottom: 16,
   },
   backButton: {
-    marginRight: 0,
-    backgroundColor: '#f18e37',
-    borderRadius: 50,
-    padding: 10,
+    marginRight: 8,
   },
   headerTitle: {
-    marginRight: 'auto',
-    marginLeft: 'auto',
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
   },
   inputContainer: {
-    padding: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 16,
   },
   dateInput: {
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 16,
     justifyContent: 'center',
   },
-  addButton: {
-    backgroundColor: '#f18e37',
-    padding: 15,
-    borderRadius: 5,
+  picker: {
+    height: 50,
+    width: '100%',
+    marginBottom: 16,
+  },
+  submitButton: {
+    backgroundColor: '#007BFF',
+    padding: 12,
+    borderRadius: 4,
     alignItems: 'center',
-    marginBottom: 15,
   },
-  addButtonText: {
+  submitButtonText: {
     color: '#fff',
-    fontSize: 16,
-  },
-  deleteButton: {
-    backgroundColor: '#d9534f',
-    padding: 15,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  editButton: {
-    backgroundColor: '#5bc0de',
-    padding: 15,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  editButtonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  eventsContainer: {
-    padding: 20,
+    fontWeight: 'bold',
   },
   eventContainer: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 5,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 4,
+    marginBottom: 8,
   },
   eventName: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 5,
   },
   eventDate: {
-    fontSize: 16,
-    marginBottom: 5,
+    fontSize: 14,
+    color: '#555',
   },
   eventDescription: {
-    fontSize: 16,
-    marginBottom: 5,
+    fontSize: 14,
+    marginVertical: 4,
   },
   eventLink: {
-    fontSize: 16,
-    color: '#007bff',
+    fontSize: 14,
+    color: '#007BFF',
+  },
+  eventLocation: {
+    fontSize: 14,
+    color: '#777',
+  },
+  editButton: {
+    backgroundColor: '#FFC107',
+    padding: 8,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  deleteButton: {
+    backgroundColor: '#dc3545',
+    padding: 8,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
 

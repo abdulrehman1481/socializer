@@ -123,13 +123,13 @@ const SocietyDetailScreen = ({ route, navigation }) => {
         const societyDoc = await db.collection('societies').doc(societyId).get();
         if (societyDoc.exists) {
           const societyData = societyDoc.data();
-    
+      
           setSociety(societyData);
           fetchPortfolioMembers(societyData.portfolios || [], societyData.roles || {});
           setAboutInfo(societyData.aboutInfo || []);
-    
+      
           // Ensure interview locations are set
-          if (Array.isArray(societyData.locations)) { // Change Locations to locations here
+          if (Array.isArray(societyData.locations)) { // Updated to handle 'locations'
             setInterviewLocations(societyData.locations);
           } else {
             setInterviewLocations([]);
@@ -142,6 +142,7 @@ const SocietyDetailScreen = ({ route, navigation }) => {
   
     fetchSocietyData();
   }, [societyId]);
+  
   
 
 
@@ -315,7 +316,7 @@ const SocietyDetailScreen = ({ route, navigation }) => {
         </Text>
         <Text style={styles.infoText}>{society.isOpenForInterviews ? 'Yes' : 'No'}</Text>
         
-        {interviewLocations.length > 0 && (
+        {/* {interviewLocations.length > 0 && (
   <View style={{ marginTop: 20, paddingHorizontal: 10 }}>
     <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#F2F2F2', marginBottom: 10 }}>
       <Ionicons name="location" size={22} color="#ffc145" /> Interview Locations:
@@ -329,7 +330,9 @@ const SocietyDetailScreen = ({ route, navigation }) => {
       ))}
     </View>
   </View>
-)}
+)} */}
+
+
         <View style={styles.adminButtonsContainer}>
           {(isAdmin || isSocietyAdmin) && (
             <>
@@ -671,6 +674,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
+
+  locationSection: {
+    marginTop: 20,
+    paddingHorizontal: 10,
+  },
+  locationTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#F2F2F2',
+    marginBottom: 10,
+  },
+  locationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  locationText: {
+    fontSize: 16,
+    color: '#F2F2F2',
+    marginLeft: 8,
+  },
+
   addAboutButton: {
     backgroundColor: '#1E1E1E',
     paddingVertical: 12,
