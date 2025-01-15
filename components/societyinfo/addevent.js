@@ -2,9 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, FlatList, SafeAreaView, RefreshControl } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { db, firebase } from '../../firebase';
-import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
-
+import { Picker } from '@react-native-picker/picker';
 const nustBuildings = [
   { name: 'Concordia 1', coordinates: [33.6416, 72.9934] },
   { name: 'Concordia 2', coordinates: [33.6411, 72.9938] },
@@ -16,6 +15,8 @@ const nustBuildings = [
   { name: 'RCMS (Research Center for Modeling and Simulation)', coordinates: [33.6487, 72.9945] },
   { name: 'PNEC (Pakistan Navy Engineering College)', coordinates: [24.9056, 67.1167] },
 ];
+
+
 const AddEventScreen = ({ route, navigation }) => {
   const { societyId, event } = route.params || {};
   const [events, setEvents] = useState([]);

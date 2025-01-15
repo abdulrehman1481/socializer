@@ -97,7 +97,7 @@ const MainTabs = () => {
             }}
           />
           <Tab.Screen name="Map" component={Mapscreen} options={{
-              tabBarIcon: ({ color }) => <Ionicons name="location" size={30} color={color} />,
+              tabBarIcon: ({ color }) => <Ionicons name="location-outline" size={30} color={color} />,
             }} />
 
         </Tab.Navigator>

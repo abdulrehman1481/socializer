@@ -129,11 +129,7 @@ const SocietyDetailScreen = ({ route, navigation }) => {
           setAboutInfo(societyData.aboutInfo || []);
       
           // Ensure interview locations are set
-          if (Array.isArray(societyData.locations)) { // Updated to handle 'locations'
-            setInterviewLocations(societyData.locations);
-          } else {
-            setInterviewLocations([]);
-          }
+          setInterviewLocations(Array.isArray(societyData.locations) ? societyData.locations : []);
         }
       } catch (error) {
         console.error("Error fetching society details:", error);
@@ -142,8 +138,9 @@ const SocietyDetailScreen = ({ route, navigation }) => {
   
     fetchSocietyData();
   }, [societyId]);
-  
-  
+  const handleLocationPress = (location) => {
+    navigation.navigate('Map', { coordinates: location.coordinates, name: location.name });
+  };
 
 
   const handleEdit = () => {
@@ -316,21 +313,22 @@ const SocietyDetailScreen = ({ route, navigation }) => {
         </Text>
         <Text style={styles.infoText}>{society.isOpenForInterviews ? 'Yes' : 'No'}</Text>
         
-        {/* {interviewLocations.length > 0 && (
-  <View style={{ marginTop: 20, paddingHorizontal: 10 }}>
-    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#F2F2F2', marginBottom: 10 }}>
-      <Ionicons name="location" size={22} color="#ffc145" /> Interview Locations:
-    </Text>
-    <View style={{ flexDirection: 'column' }}>
-      {interviewLocations.map((location, index) => (
-        <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-          <Ionicons name="location-outline" size={18} color="#F2F2F2" />
-          <Text style={{ fontSize: 16, color: '#F2F2F2', marginLeft: 8 }}>{location}</Text>
-        </View>
-      ))}
-    </View>
-  </View>
-)} */}
+        {interviewLocations.length > 0 && (
+  <Text style={styles.sectionTitle}>
+    <Ionicons name="location" size={22} color="#ffc145" /> 
+    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#F2F2F2' }}>Interview Locations</Text>
+  </Text>
+)}
+ {interviewLocations.length > 0 ? (
+          interviewLocations.map((location, index) => (
+            <TouchableOpacity key={index} onPress={() => handleLocationPress(location)}>
+            <Ionicons name="location" size={16} color="#ffc145" />
+            <Text style={styles.locationText}>{location.name}</Text>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <Text style={styles.noItemsText}>No interview locations available.</Text>
+        )}
 
 
         <View style={styles.adminButtonsContainer}>

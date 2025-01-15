@@ -1,46 +1,47 @@
-import React, { useEffect, useState } from "react";
-import { StyleSheet, View, Modal, TouchableOpacity, ScrollView, Text, Image } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  StyleSheet,
+  View,
+  Modal,
+  TouchableOpacity,
+  ScrollView,
+  Text,
+  Image,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { db } from '../firebase';
+import { useNavigation } from '@react-navigation/native';
 
 export default function MapScreen() {
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const mapRef = useRef(null);
+  const navigation = useNavigation();
 
   useEffect(() => {
-    const fetchEvents = (societyData) => {
-      if (societyData.events) {
-        return societyData.events; // Directly return the events array from society data
-      }
-      return []; // Return an empty array if no events found
-    };
-    
     const fetchLocations = async () => {
       try {
         const snapshot = await db.collection('societies').get();
         const allLocations = [];
-    
+
         for (const doc of snapshot.docs) {
           const societyData = doc.data();
-          console.log(`Society Data:`, societyData);
-          
+
           if (societyData.locations) {
             for (const location of societyData.locations) {
               if (location.coordinates && location.coordinates.length === 2) {
-                // Fetch events directly from the society data
-                const events = fetchEvents(societyData);
-                console.log(`Events for Society ${doc.id}:`, events);
-                
                 allLocations.push({
                   ...location,
                   societyName: societyData.name,
                   logo: societyData.logo,
-                  mainWork: societyData.mainWork,
+                  events: societyData.events || [],
                   isOpenForInterviews: societyData.isOpenForInterviews || false,
-                  events,
                   description: societyData.description,
-                  slogan: societyData.slogan,
                 });
               }
             }
@@ -49,96 +50,119 @@ export default function MapScreen() {
         setLocations(allLocations);
       } catch (error) {
         console.error("Error fetching locations: ", error);
+        Alert.alert("Error", "There was an issue fetching the locations. Please try again.");
+      } finally {
+        setLoading(false);
       }
     };
-    
+
     fetchLocations();
   }, []);
 
   const handleMarkerPress = (location) => {
+    mapRef.current.animateToRegion(
+      {
+        latitude: location.coordinates[0],
+        longitude: location.coordinates[1],
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      },
+      1000
+    );
+
     setSelectedLocation(location);
     setModalVisible(true);
   };
 
+  const navigateToSocietyDetail = () => {
+    if (selectedLocation) {
+      navigation.navigate("SocietyDetail", { societyId: selectedLocation.id });
+      setModalVisible(false);
+    }
+  };
+
   const renderModalContent = () => {
     if (!selectedLocation) return null;
-  
-    const { societyName, logo, slogan, events, isOpenForInterviews } = selectedLocation;
-    console.log("Selected Location Events:", events);
-  
+
+    const { societyName, logo, isOpenForInterviews, events } = selectedLocation;
+
     return (
       <>
         <Image source={{ uri: logo }} style={styles.logo} />
         <Text style={styles.name}>{societyName}</Text>
-        <Text style={styles.slogan}>{slogan}</Text>
-  
+        
         {isOpenForInterviews && (
           <Text style={styles.infoText}>This society is taking interviews here.</Text>
         )}
-  
-        {events && events.length > 0 ? (
+
+        {events.length > 0 ? (
           <>
             <Text style={styles.infoText}>Upcoming Events:</Text>
             {events.map((event, index) => (
               <View key={event.id || index} style={styles.eventCard}>
-                <Text style={styles.eventText}>{event.name}</Text>
-                <Text style={styles.eventDate}>Date: {new Date(event.date).toLocaleDateString()}</Text>
-                <Text style={styles.eventDescription}>{event.description}</Text>
+                <TouchableOpacity onPress={() => handleEventPress(event)}>
+                  <Text style={styles.eventText}>{event.name}</Text>
+                  <Text style={styles.eventDate}>Date: {new Date(event.date).toLocaleDateString()}</Text>
+                  <Text style={styles.eventDescription}>{event.description}</Text>
+                </TouchableOpacity>
               </View>
             ))}
           </>
         ) : (
           <Text style={styles.infoText}>No upcoming events at this location.</Text>
         )}
+
+        <TouchableOpacity style={styles.navigateButton} onPress={navigateToSocietyDetail}>
+          <Text style={styles.navigateButtonText}>View Society Details</Text>
+        </TouchableOpacity>
       </>
     );
   };
 
   return (
     <View style={styles.container}>
-      <MapView
-        style={styles.map}
-        initialRegion={{
-          latitude: 33.6844,
-          longitude: 73.0479,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        }}
-        provider={PROVIDER_GOOGLE}
-      >
-        {locations.map((location, index) => {
-          let markerColor = "green"; // Default color
-          let title = location.societyName;
+      {loading ? (
+        <ActivityIndicator size="large" color="#2196F3" style={styles.loader} />
+      ) : (
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={{
+            latitude: 33.6426,
+            longitude: 72.9906,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          }}
+          provider={PROVIDER_GOOGLE}
+        >
+          {locations.map((location, index) => {
+            const markerColor = location.isOpenForInterviews ? "green" : "orange";
 
-          if (location.isOpenForInterviews && location.events && location.events.length > 0) {
-            markerColor = "purple"; // Color for open for interviews with events
-          } else if (location.isOpenForInterviews) {
-            markerColor = "blue"; // Color for open for interviews only
-          } else if (location.events && location.events.length > 0) {
-            markerColor = "orange"; // Color for societies with events only
-          }
-
-          return (
-            <Marker
-              key={index}
-              coordinate={{
-                latitude: location.coordinates[0],
-                longitude: location.coordinates[1],
-              }}
-              title={title}
-              pinColor={markerColor}
-              onPress={() => handleMarkerPress(location)}
-            />
-          );
-        })}
-      </MapView>
+            return (
+              <Marker
+                key={index}
+                coordinate={{
+                  latitude: location.coordinates[0],
+                  longitude: location.coordinates[1],
+                }}
+                title={location.societyName}
+                pinColor={markerColor}
+                onPress={() => handleMarkerPress(location)}
+              />
+            );
+          })}
+        </MapView>
+      )}
 
       {selectedLocation && (
         <Modal
           animationType="slide"
           transparent={true}
           visible={modalVisible}
-          onRequestClose={() => setModalVisible(false)}
+          onRequestClose={() => {
+            setModalVisible(false);
+            setSelectedLocation(null);
+          }}
         >
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
@@ -147,7 +171,10 @@ export default function MapScreen() {
               </ScrollView>
               <TouchableOpacity
                 style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
+                onPress={() => {
+                  setModalVisible(false);
+                  setSelectedLocation(null);
+                }}
               >
                 <Text style={styles.closeButtonText}>Close</Text>
               </TouchableOpacity>
@@ -166,6 +193,10 @@ const styles = StyleSheet.create({
   map: {
     width: "100%",
     height: "100%",
+  },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
   },
   modalContainer: {
     flex: 1,
@@ -191,11 +222,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#000',
-  },
-  slogan: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 5,
   },
   infoText: {
     fontSize: 16,
@@ -234,6 +260,17 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   closeButtonText: {
+    color: "white",
+    fontWeight: "bold",
+  },
+  navigateButton: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: "#4CAF50",
+    borderRadius: 5,
+  },
+  navigateButtonText: {
     color: "white",
     fontWeight: "bold",
   },
